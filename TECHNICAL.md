@@ -100,11 +100,63 @@
 ## Architecture Overview
 
 ### High-Level Architecture
-```
-[User Browser] <-> [React Frontend] <-> [Express Backend] <-> [External APIs]
+
+```mermaid
+graph LR
+    User["User Browser"] 
+    Frontend["React Frontend"]
+    Backend["Express Backend"]
+    OpenAI["OpenAI API"]
+    Weather["Weather API"]
+    Pexels["Pexels API"]
+    Geo["OpenStreetMap API"]
+
+    User <--> Frontend
+    Frontend <--> Backend
+    Backend --> OpenAI
+    Backend --> Weather
+    Backend --> Pexels
+    Backend --> Geo
+
+    style User fill:#f9f,stroke:#333,stroke-width:2px
+    style Frontend fill:#bbf,stroke:#333,stroke-width:2px
+    style Backend fill:#bfb,stroke:#333,stroke-width:2px
+    style OpenAI fill:#fbb,stroke:#333,stroke-width:2px
+    style Weather fill:#fbb,stroke:#333,stroke-width:2px
+    style Pexels fill:#fbb,stroke:#333,stroke-width:2px
+    style Geo fill:#fbb,stroke:#333,stroke-width:2px
 ```
 
 ### Data Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant B as Backend
+    participant AI as OpenAI API
+    participant G as Geocoding API
+    participant W as Weather API
+    participant P as Pexels API
+
+    U->>F: Enter weather query
+    F->>F: Get browser location
+    F->>B: Send query + location
+    B->>AI: Extract location from query
+    AI-->>B: Return city, state
+    B->>G: Geocode location
+    G-->>B: Return coordinates
+    B->>W: Get weather data
+    W-->>B: Return weather info
+    B->>P: Search location images
+    P-->>B: Return city photos
+    B->>AI: Generate JD's response
+    AI-->>B: Return formatted response
+    B-->>F: Send response + image
+    F-->>U: Display chat + image
+```
+
+Detailed steps:
 1. User enters a weather query
 2. Frontend sends query to backend with geolocation
 3. Backend processes:
@@ -121,6 +173,21 @@
 ### Backend (server.js)
 
 1. **Location and State Handling**
+
+```mermaid
+flowchart TD
+    A[User Query] --> B[OpenAI Extract Location]
+    B --> C{Location Found?}
+    C -->|Yes| D[Split 'City, ST']
+    C -->|No| E[Use Browser Location]
+    D --> F[Map State Code to Full Name]
+    F --> G[Update Weather Data]
+    G --> H[Search Pexels with Full State]
+    E --> I[Get Location from Browser]
+    I --> J[Reverse Geocode]
+    J --> F
+```
+
 ```javascript
 // State mapping for consistent naming
 const stateMap = {
