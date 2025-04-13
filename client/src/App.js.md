@@ -5,7 +5,7 @@ This is the main React component for the Weather Chat application, implementing 
 
 ## Component Structure
 
-### State Management ([App.js:13-15](./App.js#L13-15))
+### State Management ([App.js:13-16](./App.js#L13-L16))
 ```javascript
 const [messages, setMessages] = useState([]);
 const [input, setInput] = useState('');
@@ -15,13 +15,13 @@ const [isLoading, setIsLoading] = useState(false);
 - `input`: Current input field value
 - `isLoading`: Loading state indicator
 
-### Auto-scrolling ([App.js:14-21](./App.js#L14-L21))
+### Auto-scrolling ([App.js:18-26](./App.js#L18-L26))
 - Uses `useRef` and `useEffect` for automatic scroll
 - **Potential Issue**: No scroll throttling for rapid messages
 
 ## Core Functions
 
-### 1. getCurrentLocation ([App.js:23-39](./App.js#L23-L39))
+### 1. getCurrentLocation ([App.js:28-44](./App.js#L28-L44))
 - Wraps browser's geolocation API in a Promise
 - Returns coordinates in {lat, lng} format
 - **Issues**:
@@ -29,7 +29,7 @@ const [isLoading, setIsLoading] = useState(false);
   2. No caching of location
   3. No handling of permission changes
 
-### 2. handleSubmit ([App.js:35-60](./App.js#L35-60))
+### 2. handleSubmit ([App.js:45-70](./App.js#L45-L70))
 - Handles form submission
 - Manages message state and API calls
 - Processes server responses with location images
@@ -38,7 +38,7 @@ const [isLoading, setIsLoading] = useState(false);
   2. No message length validation
   3. No retry mechanism for failed API calls
 
-### 3. Message Display ([App.js:110-130](./App.js#L110-130))
+### 3. Message Display ([App.js:72-137](./App.js#L72-L137))
 - Implements chat UI with messages and input
 - Renders markdown-formatted responses
 - Displays location images with attribution

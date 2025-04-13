@@ -54,10 +54,10 @@
   - Markdown rendering for formatted responses
   - Location image display integration
   - Core components:
-    - [State Management](./client/src/App.js#L13-L15) - Chat messages and UI state
-    - [getCurrentLocation](./client/src/App.js#L17-L33) - Browser geolocation
-    - [handleSubmit](./client/src/App.js#L35-L60) - Chat interaction handler
-    - [Message Display](./client/src/App.js#L110-L130) - Markdown and image rendering
+    - [State Management](./client/src/App.js#L13-L16) - Chat messages and UI state
+    - [getCurrentLocation](./client/src/App.js#L27-L43) - Browser geolocation
+    - [handleSubmit](./client/src/App.js#L45-L70) - Chat interaction handler
+    - [Message Display](./client/src/App.js#L72-L137) - Markdown and image rendering
 
 ### Backend
 - **Node.js/Express** ([server.js](./server.js))
@@ -66,10 +66,10 @@
   - Excellent async/await support for API calls
   - Personality configuration via external file
   - Core functions:
-    - [extractLocation](./server.js#L37-L86) - Location extraction using GPT-3.5-turbo
-    - [getCoordinatesForLocation](./server.js#L90-L146) - Geocoding using OpenStreetMap
-    - [getWeatherData](./server.js#L26-L34) - Weather data fetching
-    - [Chat endpoint](./server.js#L148-L240) - Main API integration point with image support
+    - [extractLocation](./server.js#L44-L96) - Location extraction using GPT-3.5-turbo
+    - [getCoordinatesForLocation](./server.js#L99-L154) - Geocoding using OpenStreetMap
+    - [getWeatherData](./server.js#L33-L42) - Weather data fetching
+    - [Chat endpoint](./server.js#L155-L279) - Main API integration point with image support
 
 ### External Services
 1. **OpenAI API** ([OpenAI Client](./server.js#L11-L13))
@@ -126,18 +126,18 @@ async function extractLocation(message) {
 ```
 
 2. **Geocoding Service**
-See [getCoordinatesForLocation](./server.js#L90-L146) in server.js for implementation details.
+See [getCoordinatesForLocation](./server.js#L99-L154) in server.js for implementation details.
 
 3. **Weather Data Retrieval**
-See [getWeatherData](./server.js#L26-L34) in server.js for implementation details.
+See [getWeatherData](./server.js#L33-L42) in server.js for implementation details.
 
 4. **Chat Endpoint**
-See [Chat endpoint](./server.js#L148-L222) in server.js for implementation details.
+See [Chat endpoint](./server.js#L155-L279) in server.js for implementation details.
 
 ### Frontend (App.js)
 
 1. **Geolocation Handler**
-See [getCurrentLocation](./client/src/App.js#L23-L39) in App.js for implementation details.
+See [getCurrentLocation](./client/src/App.js#L27-L43) in App.js for implementation details.
 
 2. **Chat Interface**
 ```javascript
@@ -147,6 +147,42 @@ function App() {
   // Renders chat interface with loading states
 }
 ```
+
+### API between Frontend and Backend
+
+1. **Chat Endpoint**
+   - **URL**: `/api/chat`
+   - **Method**: POST
+   - **Request Body**:
+     ```json
+     {
+       "message": "string",  // User's chat message
+       "location": {        // Browser geolocation (optional)
+         "lat": number,
+         "lng": number
+       }
+     }
+     ```
+   - **Response Body**:
+     ```json
+     {
+       "text": "string",     // AI response with weather info
+       "locationImage": "string", // URL to city image
+       "city": "string",     // Extracted city name
+       "state": "string",    // Extracted state
+       "requestedLocation": "string", // Original location request
+       "browserLocation": {   // Original browser location
+         "lat": number,
+         "lng": number
+       }
+     }
+     ```
+   - **Error Response**:
+     ```json
+     {
+       "error": "string"    // Error message if request fails
+     }
+     ```
 
 ## Error Handling
 
