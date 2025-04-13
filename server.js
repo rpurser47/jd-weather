@@ -17,6 +17,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// State code to full name mapping
+const stateMap = {
+  'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
+  'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia',
+  'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa',
+  'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+  'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi', 'MO': 'Missouri',
+  'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada', 'NH': 'New Hampshire', 'NJ': 'New Jersey',
+  'NM': 'New Mexico', 'NY': 'New York', 'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio',
+  'OK': 'Oklahoma', 'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+  'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont',
+  'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming'
+};
+
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -182,27 +196,42 @@ app.post('/api/chat', async (req, res) => {
         location = locationCoords;
         weatherData.requestedLocation = requestedLocation;
         // Parse city and state from the location string
-        const [city, state] = requestedLocation.split(',').map(part => part.trim());
+        const [city, stateCode] = requestedLocation.split(',').map(part => part.trim());
         weatherData.city = city;
-        weatherData.state = state;
+        // Convert state code to full name
+        weatherData.state = stateMap[stateCode] || stateCode;
 
         // Fetch location image
         try {
-          // Search for city landmarks or skyline
-          const searchTerm = `${city} ${state} skyline landmarks downtown`;
+          // Search for iconic shots
+          // Use full state name for better image results
+          const searchTerm = `${city} ${weatherData.state} iconic`;
           // Get 20 photos to ensure we have enough to choose from
           const result = await pexelsClient.photos.search({ query: searchTerm, per_page: 20 });
           if (result.photos.length > 0) {
-            // Sort photos by likes in descending order
-            console.log(`Found ${result.photos.length} photos for ${city}`);            
-            const sortedPhotos = result.photos.sort((a, b) => (b.likes_count || 0) - (a.likes_count || 0));
-            // Log likes counts for verification
-            console.log('Top 5 photos by likes:', sortedPhotos.slice(0, 5).map(p => ({ id: p.id, likes: p.likes_count })));
+            // Sort photos by width (assuming higher resolution photos are better quality)
+            const sortedPhotos = result.photos.sort((a, b) => {
+              // Prioritize landscape photos that aren't too tall
+              const aRatio = a.width / a.height;
+              const bRatio = b.width / b.height;
+              // Prefer photos with aspect ratios between 1:1 and 2:1
+              const aScore = aRatio >= 1 && aRatio <= 2 ? a.width : 0;
+              const bScore = bRatio >= 1 && bRatio <= 2 ? b.width : 0;
+              return bScore - aScore;
+            });
+            // Log photo dimensions for verification
+            console.log('Top 5 photos by quality:', sortedPhotos.slice(0, 5).map(p => ({
+              id: p.id,
+              width: p.width,
+              height: p.height,
+              ratio: (p.width / p.height).toFixed(2)
+            })));
             // Take top 10 (or all if less than 10) and choose randomly
             const topPhotos = sortedPhotos.slice(0, Math.min(10, sortedPhotos.length));
             const randomPhoto = topPhotos[Math.floor(Math.random() * topPhotos.length)];
-            console.log(`Selected photo ID ${randomPhoto.id} with ${randomPhoto.likes_count} likes`);
-            weatherData.locationImage = randomPhoto.src.medium;
+            console.log(`Selected photo ID ${randomPhoto.id} (${randomPhoto.width}x${randomPhoto.height})`);
+            // Use large size for better quality
+            weatherData.locationImage = randomPhoto.src.large;
           }
         } catch (error) {
           console.error('Error fetching location image:', error);
@@ -241,8 +270,14 @@ app.post('/api/chat', async (req, res) => {
       }
     }
 
-    // Prepare context for the AI
-    const weatherContext = JSON.stringify(weatherData);
+    // Prepare context for the AI with explicit location information
+    const weatherContext = JSON.stringify({
+      ...weatherData,
+      fullLocation: weatherData.city && weatherData.state ? `${weatherData.city}, ${weatherData.state}` : null,
+      // Include browser location city/state if available
+      browserFullLocation: weatherData.browserWeather ? weatherData.browserWeather.location.relativeLocation.properties.city + ", " + 
+        weatherData.browserWeather.location.relativeLocation.properties.state : null
+    });
     
     const completion = await openai.chat.completions.create({
       model: "gpt-4-turbo-preview",
