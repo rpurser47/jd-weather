@@ -23,6 +23,8 @@
    - Extracts location from user messages using AI
    - Falls back to browser geolocation if no location is specified
    - Validates and geocodes locations to coordinates
+   - Converts state codes to full names (e.g., 'NY' to 'New York')
+   - Maintains consistent state naming across all responses
 
 3. Weather Information
    - Provides real-time weather data from official sources
@@ -80,9 +82,10 @@
    - Context-aware weather information presentation
 
 2. **Pexels API** ([Pexels Client](./server.js#L8-L10))
-   - Location-based image search
-   - City and landscape photography
-   - Enhances chat responses with visual context
+   - Location-based image search using full state names
+   - Smart image selection prioritizing landscape photos
+   - Quality scoring based on aspect ratio and resolution
+   - Enhances chat responses with high-quality visual context
 
 2. **National Weather Service API** ([Weather API Client](./server.js#L18-L23))
    - Official source of US weather data
@@ -117,12 +120,22 @@
 
 ### Backend (server.js)
 
-1. **Location Extraction**
+1. **Location and State Handling**
 ```javascript
+// State mapping for consistent naming
+const stateMap = {
+  'NY': 'New York',
+  'CA': 'California',
+  // ... all US states mapped
+};
+
 async function extractLocation(message) {
   // Uses OpenAI to extract standardized location from user message
   // Returns format: "City, ST" or null
 }
+
+// Convert state codes to full names
+weatherData.state = stateMap[stateCode] || stateCode;
 ```
 
 2. **Geocoding Service**
@@ -169,7 +182,7 @@ function App() {
        "text": "string",     // AI response with weather info
        "locationImage": "string", // URL to city image
        "city": "string",     // Extracted city name
-       "state": "string",    // Extracted state
+       "state": "string",    // Full state name (e.g., "New York")
        "requestedLocation": "string", // Original location request
        "browserLocation": {   // Original browser location
          "lat": number,
