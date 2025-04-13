@@ -194,10 +194,14 @@ app.post('/api/chat', async (req, res) => {
           const result = await pexelsClient.photos.search({ query: searchTerm, per_page: 20 });
           if (result.photos.length > 0) {
             // Sort photos by likes in descending order
-            const sortedPhotos = result.photos.sort((a, b) => (b.liked || 0) - (a.liked || 0));
+            console.log(`Found ${result.photos.length} photos for ${city}`);            
+            const sortedPhotos = result.photos.sort((a, b) => (b.likes_count || 0) - (a.likes_count || 0));
+            // Log likes counts for verification
+            console.log('Top 5 photos by likes:', sortedPhotos.slice(0, 5).map(p => ({ id: p.id, likes: p.likes_count })));
             // Take top 10 (or all if less than 10) and choose randomly
             const topPhotos = sortedPhotos.slice(0, Math.min(10, sortedPhotos.length));
             const randomPhoto = topPhotos[Math.floor(Math.random() * topPhotos.length)];
+            console.log(`Selected photo ID ${randomPhoto.id} with ${randomPhoto.likes_count} likes`);
             weatherData.locationImage = randomPhoto.src.medium;
           }
         } catch (error) {
