@@ -190,9 +190,15 @@ app.post('/api/chat', async (req, res) => {
         try {
           // Search for city landmarks or skyline
           const searchTerm = `${city} ${state} skyline landmarks downtown`;
-          const result = await pexelsClient.photos.search({ query: searchTerm, per_page: 1 });
+          // Get 20 photos to ensure we have enough to choose from
+          const result = await pexelsClient.photos.search({ query: searchTerm, per_page: 20 });
           if (result.photos.length > 0) {
-            weatherData.locationImage = result.photos[0].src.medium;
+            // Sort photos by likes in descending order
+            const sortedPhotos = result.photos.sort((a, b) => (b.liked || 0) - (a.liked || 0));
+            // Take top 10 (or all if less than 10) and choose randomly
+            const topPhotos = sortedPhotos.slice(0, Math.min(10, sortedPhotos.length));
+            const randomPhoto = topPhotos[Math.floor(Math.random() * topPhotos.length)];
+            weatherData.locationImage = randomPhoto.src.medium;
           }
         } catch (error) {
           console.error('Error fetching location image:', error);
