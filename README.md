@@ -14,7 +14,8 @@ A charming weather application featuring JD, a gentle 90-year-old grandmother wh
 ## Prerequisites
 1. Node.js and npm installed
 2. OpenAI API key
-3. Internet connection for API access
+3. Pexels API key
+4. Internet connection for API access
 
 ## Setup
 1. Clone the repository
@@ -27,6 +28,8 @@ A charming weather application featuring JD, a gentle 90-year-old grandmother wh
 3. Create a `.env` file in the root directory with:
    ```
    OPENAI_API_KEY=your_openai_api_key
+   PEXELS_API_KEY=your_pexels_api_key
+   WEATHER_USER_AGENT=your_email_address_for_api_requests
    ```
 4. Start the development server:
    ```bash
