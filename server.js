@@ -1,3 +1,6 @@
+// Initialize OpenTelemetry - must be first import
+const { tracing, metrics } = require('./tracing');
+
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
@@ -16,6 +19,27 @@ const pexelsClient = createClient(process.env.PEXELS_API_KEY);
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Add request tracking middleware
+app.use((req, res, next) => {
+  const startTime = Date.now();
+  // Increment request counter
+  tracing.incrementRequestCounter(req.path);
+  
+  // Add response hook to track response time
+  const originalSend = res.send;
+  res.send = function(body) {
+    const endTime = Date.now();
+    metrics.apiLatencyHistogram.record(endTime - startTime, { 
+      path: req.path,
+      method: req.method,
+      status: res.statusCode
+    });
+    return originalSend.call(this, body);
+  };
+  
+  next();
+});
 
 // State code to full name mapping
 const stateMap = {
@@ -47,26 +71,29 @@ const weatherApi = axios.create({
 
 // Helper function to get weather data
 async function getWeatherData(endpoint) {
-  try {
-    const response = await weatherApi.get(endpoint);
-    return response.data;
-  } catch (error) {
-    console.error('Weather API Error:', error);
-    throw error;
-  }
+  return await tracing.createSpan('api.weather.gov', { endpoint }, async () => {
+    try {
+      const response = await weatherApi.get(endpoint);
+      return response.data;
+    } catch (error) {
+      console.error('Weather API Error:', error);
+      throw error;
+    }
+  });
 }
 
 // Helper function to extract location from message using OpenAI
 async function extractLocation(message) {
-  console.log('Extracting location from message:', message);
-  
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OpenAI API key is not configured');
-  }
+  return await tracing.createSpan('openai.extract_location', { message_length: message.length }, async () => {
+    console.log('Extracting location from message:', message);
+    
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OpenAI API key is not configured');
+    }
 
-  try {
-    console.log('Calling OpenAI API...');
-    const completion = await openai.chat.completions.create({
+    try {
+      console.log('Calling OpenAI API...');
+      const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
         {
@@ -108,13 +135,15 @@ Output: none`
     }
     throw error;
   }
+  });
 }
 
 
 // Helper function to get coordinates for a location name
 async function getCoordinatesForLocation(locationName) {
-  try {
-    console.log('Geocoding location:', locationName);
+  return await tracing.createSpan('geocoding.location', { location: locationName }, async () => {
+    try {
+      console.log('Geocoding location:', locationName);
     
     // Add state if not present (assuming US)
     const hasState = /,\s*[A-Z]{2}$/.test(locationName);
@@ -166,6 +195,7 @@ async function getCoordinatesForLocation(locationName) {
     console.error('Geocoding Error:', error);
     return null;
   }
+  });
 }
 
 app.post('/api/chat', async (req, res) => {
