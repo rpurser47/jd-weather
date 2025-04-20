@@ -21,9 +21,18 @@ exporters:
     verbosity: detailed
     
   otlp:
-    endpoint: jaeger:4317
+    endpoint: "jaeger:4317"  # Using Docker service name
     tls:
       insecure: true
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 100
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
 
 service:
   pipelines:

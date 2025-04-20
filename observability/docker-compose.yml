@@ -1,8 +1,12 @@
-version: '3'
+# Define a custom network for all services
+networks:
+  observability-network:
+    driver: bridge
+
 services:
   # OpenTelemetry Collector
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.96.0
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
@@ -10,13 +14,15 @@ services:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
       - "8889:8889"   # Prometheus exporter
+    networks:
+      - observability-network
     depends_on:
       - jaeger
       - prometheus
 
   # Jaeger for trace visualization
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/all-in-one:1.50
     ports:
       - "16686:16686"  # UI
       - "14250:14250"  # Model used by collector
@@ -24,18 +30,22 @@ services:
       - "6831:6831/udp" # Jaeger thrift compact
     environment:
       - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - observability-network
 
   # Prometheus for metrics storage
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.48.1
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
+    networks:
+      - observability-network
 
   # Grafana for dashboards
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.2.3
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
     ports:
@@ -43,6 +53,8 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - observability-network
     depends_on:
       - prometheus
       - jaeger

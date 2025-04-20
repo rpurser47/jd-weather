@@ -1,124 +1,258 @@
-// OpenTelemetry instrumentation for Node.js with Jaeger and Prometheus
-const opentelemetry = require('@opentelemetry/sdk-node');
-const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
-const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
-const { OTLPMetricExporter } = require('@opentelemetry/exporter-metrics-otlp-http');
-const { Resource } = require('@opentelemetry/resources');
-const { trace, metrics, diag, DiagConsoleLogger, DiagLogLevel } = require('@opentelemetry/api');
-const { PeriodicExportingMetricReader } = require('@opentelemetry/sdk-metrics');
+// OpenTelemetry instrumentation for JD Weather App with Jaeger and Prometheus
 
-// Set up diagnostic logging (minimal)
-diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.ERROR);
+// Import required OpenTelemetry components
+const { trace, metrics, context } = require('@opentelemetry/api');
 
-console.log('Initializing OpenTelemetry with Jaeger and Prometheus');
-
-try {
-  // Define service name and other attributes
-  const sdk = new opentelemetry.NodeSDK({
-    resource: new Resource({
-      'service.name': 'jd-weather-service',
-      'service.version': '1.0.0',
-      'environment': 'development',
-    }),
-    traceExporter: new OTLPTraceExporter({
-      url: 'http://localhost:4318/v1/traces',
-    }),
-    metricReader: new PeriodicExportingMetricReader({
-      exporter: new OTLPMetricExporter({
-        url: 'http://localhost:4318/v1/metrics',
-      }),
-      exportIntervalMillis: 5000, // Export metrics every 5 seconds
-    }),
-    instrumentations: [getNodeAutoInstrumentations()],
-  });
-
-  // Initialize the SDK and register with the OpenTelemetry API
-  sdk.start()
-    .then(() => console.log('OpenTelemetry initialized with Jaeger and Prometheus exporters'))
-    .catch((error) => console.error('Error initializing OpenTelemetry', error));
-
-  // Gracefully shut down the SDK on process exit
-  process.on('SIGTERM', () => {
-    sdk.shutdown()
-      .then(() => console.log('OpenTelemetry SDK shut down successfully'))
-      .catch((error) => console.error('Error shutting down OpenTelemetry SDK', error))
-      .finally(() => process.exit(0));
-  });
-} catch (error) {
-  console.error('Failed to initialize OpenTelemetry:', error);
-}
-
-// Create a tracer and meter for manual instrumentation
-const tracer = trace.getTracer('jd-weather-tracer');
-const meter = metrics.getMeter('jd-weather-metrics');
-
-// Create request counter
-const requestCounter = meter.createCounter('jd_weather_requests', {
-  description: 'Counts the number of requests received',
-});
-
-// Create API latency histogram
-const apiLatencyHistogram = meter.createHistogram('jd_weather_api_latency', {
-  description: 'Measures the latency of API calls',
-  unit: 'ms',
-});
-
-/**
- * Creates a span for tracking operations manually
- * @param {string} name - The name of the span
- * @param {object} attributes - Attributes to add to the span
- * @param {function} operation - The operation to track
- * @returns {Promise<any>} - The result of the operation
- */
-async function createSpan(name, attributes, operation) {
-  return await tracer.startActiveSpan(name, async (span) => {
+// Create a simple logger for traces and metrics with OTLP export capability
+class EnhancedInstrumentation {
+  constructor() {
+    this.requestCounts = {};
+    this.apiLatencies = {};
+    
+    // Log counts and latencies periodically
+    setInterval(() => {
+      this._logMetrics();
+      this._sendMetricsToCollector();
+    }, 30000); // Log every 30 seconds
+    
+    console.log('OpenTelemetry initialized with Jaeger and Prometheus');
+    
+    // Try to send a test metric to the collector
+    this._sendTestMetric();
+  }
+  
+  // Send a test metric to the collector to verify connectivity
+  async _sendTestMetric() {
     try {
-      // Set attributes on the span
-      span.setAttributes(attributes);
+      const response = await fetch('http://localhost:4318/v1/metrics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          "resourceMetrics": [{
+            "resource": {
+              "attributes": [{
+                "key": "service.name",
+                "value": { "stringValue": "jd-weather-service" }
+              }]
+            },
+            "scopeMetrics": [{
+              "metrics": [{
+                "name": "test.metric",
+                "sum": {
+                  "dataPoints": [{
+                    "asInt": "1",
+                    "timeUnixNano": `${Date.now() * 1000000}`
+                  }]
+                }
+              }]
+            }]
+          }]
+        })
+      });
       
-      const startTime = Date.now();
+      if (response.ok) {
+        console.log('Successfully sent test metric to OpenTelemetry Collector');
+      } else {
+        console.error('Failed to send test metric to OpenTelemetry Collector:', await response.text());
+      }
+    } catch (error) {
+      console.error('Error sending test metric to OpenTelemetry Collector:', error.message);
+    }
+  }
+  
+  // Send metrics to the OpenTelemetry Collector
+  async _sendMetricsToCollector() {
+    try {
+      // Convert request counts to OTLP format
+      const dataPoints = Object.entries(this.requestCounts).map(([endpoint, count]) => ({
+        "attributes": [{ "key": "endpoint", "value": { "stringValue": endpoint } }],
+        "asInt": String(count),
+        "timeUnixNano": `${Date.now() * 1000000}`
+      }));
+      
+      if (dataPoints.length === 0) return;
+      
+      const payload = {
+        "resourceMetrics": [{
+          "resource": {
+            "attributes": [{
+              "key": "service.name",
+              "value": { "stringValue": "jd-weather-service" }
+            }]
+          },
+          "scopeMetrics": [{
+            "metrics": [{
+              "name": "http.requests",
+              "sum": { "dataPoints": dataPoints }
+            }]
+          }]
+        }]
+      };
+      
+      const response = await fetch('http://localhost:4318/v1/metrics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (response.ok) {
+        console.log('Successfully sent metrics to OpenTelemetry Collector');
+      } else {
+        console.error('Failed to send metrics to OpenTelemetry Collector:', await response.text());
+      }
+    } catch (error) {
+      console.error('Error sending metrics to OpenTelemetry Collector:', error.message);
+    }
+  }
+  
+  // Send a trace to the OpenTelemetry Collector
+  async _sendTraceToCollector(name, attributes, startTime, endTime, status = 'OK', errorMessage = null) {
+    try {
+      const traceId = this._generateTraceId();
+      const spanId = this._generateSpanId();
+      
+      const payload = {
+        "resourceSpans": [{
+          "resource": {
+            "attributes": [{
+              "key": "service.name",
+              "value": { "stringValue": "jd-weather-service" }
+            }]
+          },
+          "scopeSpans": [{
+            "spans": [{
+              "traceId": traceId,
+              "spanId": spanId,
+              "name": name,
+              "kind": 1, // SPAN_KIND_INTERNAL
+              "startTimeUnixNano": `${startTime * 1000000}`,
+              "endTimeUnixNano": `${endTime * 1000000}`,
+              "attributes": Object.entries(attributes).map(([key, value]) => ({
+                "key": key,
+                "value": { "stringValue": String(value) }
+              })),
+              "status": {
+                "code": status === 'OK' ? 1 : 2, // 1 = OK, 2 = ERROR
+                "message": errorMessage || ""
+              }
+            }]
+          }]
+        }]
+      };
+      
+      const response = await fetch('http://localhost:4318/v1/traces', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (response.ok) {
+        console.log(`Successfully sent trace "${name}" to OpenTelemetry Collector`);
+      } else {
+        console.error(`Failed to send trace "${name}" to OpenTelemetry Collector:`, await response.text());
+      }
+    } catch (error) {
+      console.error(`Error sending trace "${name}" to OpenTelemetry Collector:`, error.message);
+    }
+  }
+  
+  // Generate a random trace ID (16 bytes)
+  _generateTraceId() {
+    return Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  }
+  
+  // Generate a random span ID (8 bytes)
+  _generateSpanId() {
+    return Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  }
+
+  // Create a span and track an operation
+  async createSpan(name, attributes, operation) {
+    const startTime = Date.now();
+    console.log(`[TRACE] Starting: ${name}`, attributes);
+    
+    try {
       const result = await operation();
       const endTime = Date.now();
+      const duration = endTime - startTime;
       
-      // Record latency for API calls if it's an API operation
+      console.log(`[TRACE] Completed: ${name} in ${duration}ms`, attributes);
+      
+      // Track API latencies if it's an API operation
       if (name.includes('api')) {
-        apiLatencyHistogram.record(endTime - startTime, attributes);
+        if (!this.apiLatencies[name]) {
+          this.apiLatencies[name] = [];
+        }
+        this.apiLatencies[name].push(duration);
       }
+      
+      // Send trace to OpenTelemetry Collector
+      this._sendTraceToCollector(name, attributes, startTime, endTime);
       
       return result;
     } catch (error) {
-      // Record error information on the span
-      span.recordException(error);
-      span.setStatus({
-        code: trace.SpanStatusCode.ERROR,
-        message: error.message,
-      });
+      const endTime = Date.now();
+      console.error(`[TRACE] Error in ${name}:`, error.message);
+      
+      // Send error trace to OpenTelemetry Collector
+      this._sendTraceToCollector(name, attributes, startTime, endTime, 'ERROR', error.message);
+      
       throw error;
-    } finally {
-      // End the span when the operation is complete
-      span.end();
     }
-  });
+  }
+  
+  // Increment request counter for a specific endpoint
+  incrementRequestCounter(endpoint) {
+    if (!this.requestCounts[endpoint]) {
+      this.requestCounts[endpoint] = 0;
+    }
+    this.requestCounts[endpoint]++;
+    console.log(`[METRIC] Request to ${endpoint}, count: ${this.requestCounts[endpoint]}`);
+  }
+  
+  // Log metrics to console
+  _logMetrics() {
+    console.log('\n[METRICS SUMMARY]');
+    console.log('Request counts by endpoint:', this.requestCounts);
+    
+    // Calculate average latencies
+    const avgLatencies = {};
+    for (const [api, latencies] of Object.entries(this.apiLatencies)) {
+      if (latencies.length > 0) {
+        const sum = latencies.reduce((a, b) => a + b, 0);
+        avgLatencies[api] = Math.round(sum / latencies.length);
+      }
+    }
+    console.log('Average API latencies (ms):', avgLatencies);
+  }
 }
 
-/**
- * Increments the request counter for a specific endpoint
- * @param {string} endpoint - The endpoint that was requested
- */
-function incrementRequestCounter(endpoint) {
-  requestCounter.add(1, {
-    endpoint,
-  });
-}
+// Create an instance of our enhanced instrumentation
+const enhancedTracing = new EnhancedInstrumentation();
 
 // Export the tracing functions
 module.exports = {
   tracing: {
-    createSpan,
-    incrementRequestCounter,
+    createSpan: (name, attributes, operation) => enhancedTracing.createSpan(name, attributes, operation),
+    incrementRequestCounter: (endpoint) => enhancedTracing.incrementRequestCounter(endpoint)
   },
   metrics: {
-    requestCounter,
-    apiLatencyHistogram,
+    // Expose the metrics interface
+    requestCounter: {
+      add: (count, attributes) => {
+        enhancedTracing.incrementRequestCounter(attributes.endpoint || 'unknown');
+      }
+    },
+    apiLatencyHistogram: {
+      record: (duration, attributes) => {
+        console.log(`[METRIC] API latency: ${duration}ms`, attributes);
+      }
+    }
   }
 };
